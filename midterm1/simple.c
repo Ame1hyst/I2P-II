@@ -8,6 +8,7 @@ void hexchange(char *input, char *output){
     char change[50];
     while(token != NULL){
         sprintf(change, "%X", atoi(token));
+        // snprintf(change, sizeof(change), "%X", strtol(token, NULL, 10));
         strcat(output, change);
         token = strtok(NULL, "|");
     }
