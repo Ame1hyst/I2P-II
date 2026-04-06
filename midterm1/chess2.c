@@ -1,229 +1,196 @@
 #include <stdio.h>
+#include <string.h>
 
-typedef struct { int x, y; } Position;
-typedef struct { char type; Position pos; } Piece;
-typedef struct { Position start, end; } Move;
+// Movement direction tables for each piece type
+const int DIRS_Q[8][2] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
+const int DIRS_R[4][2] = {{1,0},{-1,0},{0,1},{0,-1}};
+const int DIRS_N[8][2] = {{-1,2},{1,2},{-1,-2},{1,-2},{2,1},{2,-1},{-2,1},{-2,-1}};
+const int DIRS_B[4][2] = {{1,1},{1,-1},{-1,1},{-1,-1}};
 
-typedef struct {
-    int player_count;
-    Piece player[16];
-    int opponent_count;
-    Piece opponent[16];
-    Move moves[2];
-} GameState;
+typedef struct { int x, y; } Pos;
+typedef struct { char type; Pos pos; } Piece;
+typedef struct { Pos start, end; } Move;
 
-typedef struct {
-    int min_steps_to_checkmate;
-    Move moves[2];
-} SearchResult;
+int pc;            // number of player pieces
+Piece player[16];  // player's pieces
+Pos opp;           // opponent king position
+int board[8][8];   // 0=empty, 1..16=player piece index+1, -1=opponent king
 
-const int QUEEN_DIRS[8][2]  = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
-const int ROOK_DIRS[4][2]   = {{1,0},{-1,0},{0,1},{0,-1}};
-const int KNIGHT_DIRS[8][2] = {{-1,2},{1,2},{-1,-2},{1,-2},{2,1},{2,-1},{-2,1},{-2,-1}};
-const int BISHOP_DIRS[4][2] = {{1,1},{1,-1},{-1,1},{-1,-1}};
-
-// ── HELPER ────────────────────────────────────────────────────
-int in_bounds(int x, int y) {
-    return x >= 0 && x < 8 && y >= 0 && y < 8;
+// Build the board from current piece positions
+void build_board() {
+    memset(board, 0, sizeof(board));
+    for (int i = 0; i < pc; i++)
+        board[player[i].pos.x][player[i].pos.y] = i + 1;
+    board[opp.x][opp.y] = -1;
 }
 
-// ── BUILD BOARD ───────────────────────────────────────────────
-// Converts GameState → 2D char board
-// '.' = empty, uppercase = player piece, 'k' = enemy King
-void build_board(char board[8][8], GameState *state) {
-    for (int i = 0; i < 8; i++)
-        for (int j = 0; j < 8; j++)
-            board[i][j] = '.';
+// Can piece #pi reach square (tx, ty) with the current board state?
+int can_reach(int pi, int tx, int ty) {
+    char t = player[pi].type;
+    if (t == 'P' || t == 'K') return 0; // P and K never move
 
-    for (int i = 0; i < state->player_count; i++)
-        board[state->player[i].pos.x][state->player[i].pos.y] = state->player[i].type;
+    int x = player[pi].pos.x, y = player[pi].pos.y;
+    const int (*dirs)[2];
+    int ndirs, sliding;
 
-    for (int i = 0; i < state->opponent_count; i++)
-        board[state->opponent[i].pos.x][state->opponent[i].pos.y] = 'k';
-}
+    if      (t == 'Q') { dirs = DIRS_Q; ndirs = 8; sliding = 1; }
+    else if (t == 'R') { dirs = DIRS_R; ndirs = 4; sliding = 1; }
+    else if (t == 'N') { dirs = DIRS_N; ndirs = 8; sliding = 0; }
+    else               { dirs = DIRS_B; ndirs = 4; sliding = 1; } // B
 
-// ── MOVE GENERATORS ───────────────────────────────────────────
-// Sliding pieces (Queen, Rook, Bishop):
-// Keep stepping in each direction until blocked or out of bounds
-int gen_sliding(char board[8][8], int sx, int sy,
-                const int dirs[][2], int nd, Position out[], int max) {
-    int count = 0;
-    for (int d = 0; d < nd && count < max; d++) {
-        int nx = sx + dirs[d][0];
-        int ny = sy + dirs[d][1];
-        while (in_bounds(nx, ny) && count < max) {
-            if      (board[nx][ny] == '.') { out[count++] = (Position){nx, ny};          }
-            else if (board[nx][ny] == 'k') { out[count++] = (Position){nx, ny}; break;   }
-            else                           {                                     break;   }
-            nx += dirs[d][0];
-            ny += dirs[d][1];
-        }
-    }
-    return count;
-}
-
-// Knight: L-shape jump, ignores pieces in between
-int gen_knight(char board[8][8], int sx, int sy, Position out[], int max) {
-    int count = 0;
-    for (int d = 0; d < 8 && count < max; d++) {
-        int nx = sx + KNIGHT_DIRS[d][0];
-        int ny = sy + KNIGHT_DIRS[d][1];
-        if (in_bounds(nx, ny) && (board[nx][ny] == '.' || board[nx][ny] == 'k'))
-            out[count++] = (Position){nx, ny};
-    }
-    return count;
-}
-
-// Dispatch to correct generator based on piece type
-int get_moves(char board[8][8], int sx, int sy, Position out[], int max) {
-    char t = board[sx][sy];
-    if (t == 'Q') return gen_sliding(board, sx, sy, QUEEN_DIRS,  8, out, max);
-    if (t == 'R') return gen_sliding(board, sx, sy, ROOK_DIRS,   4, out, max);
-    if (t == 'B') return gen_sliding(board, sx, sy, BISHOP_DIRS, 4, out, max);
-    if (t == 'N') return gen_knight (board, sx, sy,               out, max);
-    return 0; // P and K don't move
-}
-
-// ── APPLY / UNDO ──────────────────────────────────────────────
-// Apply: move piece, return what was captured (for undo)
-char apply_move(char board[8][8], int sx, int sy, int ex, int ey) {
-    char captured = board[ex][ey];
-    board[ex][ey] = board[sx][sy];
-    board[sx][sy] = '.';
-    return captured;
-}
-
-// Undo: restore board exactly as it was before apply
-void undo_move(char board[8][8], int sx, int sy, int ex, int ey, char captured) {
-    board[sx][sy] = board[ex][ey];
-    board[ex][ey] = captured;
-}
-
-// ── DFS ───────────────────────────────────────────────────────
-// board     : current board (modified in place, restored after)
-// depth     : moves made so far (0 = no moves yet)
-// max_depth : search limit (1 or 2)
-// path[]    : records moves made so far
-// result    : written to when solution is found
-//
-// Call tree example (max_depth=2):
-//
-//   dfs(depth=0)
-//   └── try piece Q at H1 → move H1→H5
-//       ├── board[H5] != 'k', so recurse
-//       ├── apply H1→H5
-//       ├── dfs(depth=1)
-//       │   └── try piece Q at H5 → move H5→H8
-//       │       ├── board[H8] == 'k' → FOUND!
-//       │       └── save path, return 1
-//       ├── return 1 (bubbles up)
-//       └── (undo never reached because we returned)
-//
-// Note: undo IS still called when a branch fails (returns 0)
-int dfs(char board[8][8], int depth, int max_depth,
-        Move path[], SearchResult *result) {
-
-    // Try every square on the board
-    for (int x = 0; x < 8; x++) {
-        for (int y = 0; y < 8; y++) {
-            char c = board[x][y];
-
-            // Skip non-moving pieces (P, K) and empty squares
-            if (!(c=='Q' || c=='R' || c=='N' || c=='B')) continue;
-
-            Position moves_buf[64];
-            int n = get_moves(board, x, y, moves_buf, 64);
-
-            for (int i = 0; i < n; i++) {
-                int ex = moves_buf[i].x;
-                int ey = moves_buf[i].y;
-
-                // Record this move in the path
-                path[depth].start = (Position){x,  y };
-                path[depth].end   = (Position){ex, ey};
-
-                // ── BASE CASE: captured the King! ──────────
-                // No need to recurse, we're done
-                if (board[ex][ey] == 'k') {
-                    result->min_steps_to_checkmate = depth + 1;
-                    for (int m = 0; m <= depth; m++)
-                        result->moves[m] = path[m];
-                    return 1;
-                }
-
-                // ── RECURSE if we still have moves left ────
-                // Only go deeper if depth allows it
-                if (depth + 1 < max_depth) {
-                    char captured = apply_move(board, x, y, ex, ey);
-
-                    if (dfs(board, depth + 1, max_depth, path, result)) {
-                        return 1;  // bubble success up
-                    }
-
-                    // ── BACKTRACK ──────────────────────────
-                    // This branch failed, restore board and try next move
-                    undo_move(board, x, y, ex, ey, captured);
-                }
+    if (sliding) {
+        // Walk step by step in each direction
+        for (int d = 0; d < ndirs; d++) {
+            int nx = x + dirs[d][0], ny = y + dirs[d][1];
+            while (nx >= 0 && nx < 8 && ny >= 0 && ny < 8) {
+                if (board[nx][ny] > 0) break;       // own piece blocks path
+                if (nx == tx && ny == ty) return 1; // reached target!
+                if (board[nx][ny] < 0) break;       // opponent king blocks further
+                nx += dirs[d][0];
+                ny += dirs[d][1];
             }
         }
+    } else {
+        // Knight: check all 8 L-shape jumps (jumps over pieces, so no blocking)
+        for (int d = 0; d < ndirs; d++) {
+            int nx = x + dirs[d][0], ny = y + dirs[d][1];
+            if (nx < 0 || nx >= 8 || ny < 0 || ny >= 8) continue;
+            if (board[nx][ny] > 0) continue;        // can't land on own piece
+            if (nx == tx && ny == ty) return 1;
+        }
+    }
+    return 0;
+}
+
+// Generate all legal moves for piece #pi into moves[]
+// Returns the count of moves generated
+int gen_moves(int pi, Move *moves) {
+    char t = player[pi].type;
+    if (t == 'P' || t == 'K') return 0;
+
+    int x = player[pi].pos.x, y = player[pi].pos.y;
+    int count = 0;
+    const int (*dirs)[2];
+    int ndirs, sliding;
+
+    if      (t == 'Q') { dirs = DIRS_Q; ndirs = 8; sliding = 1; }
+    else if (t == 'R') { dirs = DIRS_R; ndirs = 4; sliding = 1; }
+    else if (t == 'N') { dirs = DIRS_N; ndirs = 8; sliding = 0; }
+    else               { dirs = DIRS_B; ndirs = 4; sliding = 1; }
+
+    if (sliding) {
+        for (int d = 0; d < ndirs; d++) {
+            int nx = x + dirs[d][0], ny = y + dirs[d][1];
+            while (nx >= 0 && nx < 8 && ny >= 0 && ny < 8) {
+                if (board[nx][ny] > 0) break;   // own piece: can't go here
+                // Add this square as a valid destination
+                moves[count].start.x = x; moves[count].start.y = y;
+                moves[count].end.x   = nx; moves[count].end.y  = ny;
+                count++;
+                if (board[nx][ny] < 0) break;   // king: capture and stop
+                nx += dirs[d][0]; ny += dirs[d][1];
+            }
+        }
+    } else { // knight
+        for (int d = 0; d < ndirs; d++) {
+            int nx = x + dirs[d][0], ny = y + dirs[d][1];
+            if (nx < 0 || nx >= 8 || ny < 0 || ny >= 8) continue;
+            if (board[nx][ny] > 0) continue;
+            moves[count].start.x = x; moves[count].start.y = y;
+            moves[count].end.x   = nx; moves[count].end.y  = ny;
+            count++;
+        }
+    }
+    return count;
+}
+
+int min_steps;
+Move best_moves[2];
+
+void check_checkmate() {
+    min_steps = 3; // 3 means impossible
+
+    // ---- Try 1-move: can any piece directly capture the king? ----
+    for (int i = 0; i < pc; i++) {
+        if (can_reach(i, opp.x, opp.y)) {
+            min_steps = 1;
+            best_moves[0].start = player[i].pos;
+            best_moves[0].end   = opp;
+            return;
+        }
     }
 
-    return 0; // no solution found at this depth
+    // ---- Try 2-move: try every possible first move, then check again ----
+    Move first_moves[64]; // max ~56 moves per piece (queen, open board)
+    for (int i = 0; i < pc; i++) {
+        int nm = gen_moves(i, first_moves);
+        for (int m = 0; m < nm; m++) {
+            Move mv = first_moves[m];
+
+            // Skip first moves that directly capture the king
+            // (those would've been caught by 1-move check above)
+            if (mv.end.x == opp.x && mv.end.y == opp.y) continue;
+
+            // === Apply the first move ===
+            board[mv.start.x][mv.start.y] = 0;   // piece leaves old square
+            board[mv.end.x][mv.end.y] = i + 1;   // piece arrives at new square
+            Pos saved = player[i].pos;
+            player[i].pos = mv.end;
+
+            // Check if any piece can now capture the king (2nd move)
+            for (int j = 0; j < pc; j++) {
+                if (can_reach(j, opp.x, opp.y)) {
+                    min_steps = 2;
+                    best_moves[0] = mv;
+                    best_moves[1].start = player[j].pos;
+                    best_moves[1].end   = opp;
+                    // Undo before returning
+                    board[mv.end.x][mv.end.y]   = 0;
+                    board[mv.start.x][mv.start.y] = i + 1;
+                    player[i].pos = saved;
+                    return;
+                }
+            }
+
+            // === Undo the first move ===
+            board[mv.end.x][mv.end.y]     = 0;
+            board[mv.start.x][mv.start.y] = i + 1;
+            player[i].pos = saved;
+        }
+    }
 }
 
-// ── CHECK CHECKMATE ───────────────────────────────────────────
-// Try depth 1 first (minimum moves), then depth 2
-// This guarantees we always find the SHORTEST solution
-void Check_Checkmate(GameState *state, SearchResult *result) {
-    char board[8][8];
-    build_board(board, state);
-    Move path[2];
-
-    // Always try shorter depth first!
-    // If we only ran max_depth=2, we might record a 2-move
-    // solution without realising a 1-move solution exists
-    if (dfs(board, 0, 1, path, result)) return;
-    if (dfs(board, 0, 2, path, result)) return;
-
-    result->min_steps_to_checkmate = 3; // impossible
-}
-
-// ── MAIN ──────────────────────────────────────────────────────
 int main() {
     int t;
     scanf("%d", &t);
     while (t--) {
-        char type, pos_x, pos_y;
-        GameState state;
-        SearchResult result;
-        result.min_steps_to_checkmate = 3;
+        char type, px, py;
 
-        scanf("%d", &state.player_count);
-        for (int i = 0; i < state.player_count; i++) {
-            scanf(" %c %c%c", &type, &pos_x, &pos_y);
-            state.player[i].type  = type;
-            state.player[i].pos.x = pos_x - 'A';
-            state.player[i].pos.y = pos_y - '1';
+        scanf("%d", &pc);
+        for (int i = 0; i < pc; i++) {
+            scanf(" %c %c%c", &type, &px, &py);
+            player[i].type    = type;
+            player[i].pos.x   = px - 'A'; // 'A'=0 ... 'H'=7
+            player[i].pos.y   = py - '1'; // '1'=0 ... '8'=7
         }
 
-        scanf("%d", &state.opponent_count);
-        for (int i = 0; i < state.opponent_count; i++) {
-            scanf(" %c %c%c", &type, &pos_x, &pos_y);
-            state.opponent[i].type  = type;
-            state.opponent[i].pos.x = pos_x - 'A';
-            state.opponent[i].pos.y = pos_y - '1';
-        }
+        int oc;
+        scanf("%d", &oc); // always 1
+        scanf(" %c %c%c", &type, &px, &py);
+        opp.x = px - 'A';
+        opp.y = py - '1';
 
-        Check_Checkmate(&state, &result);
+        build_board();
+        check_checkmate();
 
-        if (result.min_steps_to_checkmate == 3) {
+        if (min_steps == 3) {
             printf("None\n");
         } else {
-            printf("%d\n", result.min_steps_to_checkmate);
-            for (int i = 0; i < result.min_steps_to_checkmate; i++) {
+            printf("%d\n", min_steps);
+            for (int i = 0; i < min_steps; i++) {
                 printf("%c%c %c%c\n",
-                       result.moves[i].start.x + 'A', result.moves[i].start.y + '1',
-                       result.moves[i].end.x   + 'A', result.moves[i].end.y   + '1');
+                    best_moves[i].start.x + 'A', best_moves[i].start.y + '1',
+                    best_moves[i].end.x   + 'A', best_moves[i].end.y   + '1');
             }
         }
     }

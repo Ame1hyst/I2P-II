@@ -1,198 +1,227 @@
 #include <stdio.h>
-#include <string.h>
 
-// Movement direction tables for each piece type
-const int DIRS_Q[8][2] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
-const int DIRS_R[4][2] = {{1,0},{-1,0},{0,1},{0,-1}};
-const int DIRS_N[8][2] = {{-1,2},{1,2},{-1,-2},{1,-2},{2,1},{2,-1},{-2,1},{-2,-1}};
-const int DIRS_B[4][2] = {{1,1},{1,-1},{-1,1},{-1,-1}};
+typedef struct Position {
+    int x;
+    int y;
+} Position;
 
-typedef struct { int x, y; } Pos;
-typedef struct { char type; Pos pos; } Piece;
-typedef struct { Pos start, end; } Move;
+typedef struct Piece {
+    char type;
+    Position pos;
+} Piece;
 
-int pc;            // number of player pieces
-Piece player[16];  // player's pieces
-Pos opp;           // opponent king position
-int board[8][8];   // 0=empty, 1..16=player piece index+1, -1=opponent king
+typedef struct Move {
+    Position start;
+    Position end;
+} Move;
 
-// Build the board from current piece positions
-void build_board() {
-    memset(board, 0, sizeof(board));
-    for (int i = 0; i < pc; i++)
-        board[player[i].pos.x][player[i].pos.y] = i + 1;
-    board[opp.x][opp.y] = -1;
+typedef struct GameState {
+    int player_count;
+    Piece player[16];
+    int opponent_count;
+    Piece opponent[16];
+    Move moves[2];
+} GameState;
+
+typedef struct SearchResult {
+    int min_steps_to_checkmate;
+    Move moves[2];
+} SearchResult;
+
+// If you would like to solve with BFS
+// typedef struct QueueNode {
+//     GameState state;
+//     int step;
+// } QueueNode;
+
+const int QUEEN_DIRS[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+const int ROOK_DIRS[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+const int KNIGHT_DIRS[8][2] = {{-1, 2}, {1, 2}, {-1, -2}, {1, -2}, {2, 1}, {2, -1}, {-2, 1}, {-2, -1}};
+const int BISHOP_DIRS[4][2] = {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+
+// Build board
+void buildBoard(char board[8][8], GameState *state){
+    //board
+    for(int i = 0; i<8; i++){
+        for(int j = 0; j<8; j++){
+            board[i][j] = '.';
+        }
+    }
+
+    //player piece
+    for(int i = 0; i<state->player_count; i++){
+        board[state->player[i].pos.x][state->player[i].pos.y] = state->player[i].type;
+    }
+
+    // opponent piece
+    for(int i = 0; i<state->opponent_count; i++){
+        board[state->opponent[i].pos.x][state->opponent[i].pos.y] = state->opponent[i].type + 32 ;//lowercase
+    }
 }
 
-// Can piece #pi reach square (tx, ty) with the current board state?
-int can_reach(int pi, int tx, int ty) {
-    char t = player[pi].type;
-    if (t == 'P' || t == 'K') return 0; // P and K never move
+int in_bounded(int nx, int ny){
+    return nx >=0 && nx<8 && ny>=0 && ny <8;
+}
 
-    int x = player[pi].pos.x, y = player[pi].pos.y;
-    const int (*dirs)[2];
-    int ndirs, sliding;
+// Move
+int genSliding(char board[8][8], int sx, int sy, const int dir[][2], int num_dir, Position move[]){
+    int count = 0;
+    for(int i =0; i<num_dir; i++){
+        int nx = sx + dir[i][0];
+        int ny = sy + dir[i][1];
 
-    if      (t == 'Q') { dirs = DIRS_Q; ndirs = 8; sliding = 1; }
-    else if (t == 'R') { dirs = DIRS_R; ndirs = 4; sliding = 1; }
-    else if (t == 'N') { dirs = DIRS_N; ndirs = 8; sliding = 0; }
-    else               { dirs = DIRS_B; ndirs = 4; sliding = 1; } // B
+        while (in_bounded(nx, ny))
+        {
+            if(board[nx][ny] == '.') move[count++] = (Position){nx, ny};
+            else if(board[nx][ny] == 'k') {move[count++] = (Position){nx, ny}; break;}
+            else break;
 
-    if (sliding) {
-        // Walk step by step in each direction
-        for (int d = 0; d < ndirs; d++) {
-            int nx = x + dirs[d][0], ny = y + dirs[d][1];
-            while (nx >= 0 && nx < 8 && ny >= 0 && ny < 8) {
-                if (board[nx][ny] > 0) break;       // own piece blocks path
-                if (nx == tx && ny == ty) return 1; // reached target!
-                if (board[nx][ny] < 0) break;       // opponent king blocks further
-                nx += dirs[d][0];
-                ny += dirs[d][1];
-            }
+            nx += dir[i][0];
+            ny += dir[i][1];
         }
-    } else {
-        // Knight: check all 8 L-shape jumps (jumps over pieces, so no blocking)
-        for (int d = 0; d < ndirs; d++) {
-            int nx = x + dirs[d][0], ny = y + dirs[d][1];
-            if (nx < 0 || nx >= 8 || ny < 0 || ny >= 8) continue;
-            if (board[nx][ny] > 0) continue;        // can't land on own piece
-            if (nx == tx && ny == ty) return 1;
+        
+    }
+    return count;
+}
+
+int knightMove(char board[8][8], int sx, int sy, Position move[]){
+    int count = 0;
+    for(int i = 0; i<8; i++){
+        int nx = sx + KNIGHT_DIRS[i][0];
+        int ny = sy + KNIGHT_DIRS[i][1];
+
+        if(in_bounded(nx, ny) && (board[nx][ny] == '.' || board[nx][ny] == 'k')) move[count++] = (Position){nx, ny};
+    }
+    return count;
+}
+
+int genMove(char board[8][8], int sx, int sy, Position move[]){
+    char type = board[sx][sy];
+    switch (type)
+    {
+    case 'Q': return genSliding(board, sx, sy, QUEEN_DIRS, 8, move);
+    case 'R': return genSliding(board, sx, sy, ROOK_DIRS, 4, move);
+    case 'B': return genSliding(board, sx, sy, BISHOP_DIRS, 4, move);
+    case 'N': return knightMove(board, sx, sy, move);   
+    default: return 0;;
+    }
+}
+
+char appleMove(char board[8][8], int sx, int sy, int nx, int ny){
+    char captured = board[nx][ny];
+    board[nx][ny] = board[sx][sy];
+    board[sx][sy] = '.';
+    return captured;
+}
+
+void undoMove(char board[8][8], int sx, int sy, int nx, int ny, char captured){
+    board[sx][sy] = board[nx][ny];
+    board[nx][ny] = captured;
+}
+
+
+// DFS
+int dfs(char board[8][8], int depth, int max_depth, Move path[], Piece cur[], int player_count, SearchResult *result){
+    for(int i = 0; i<player_count; i++){
+        char type = cur[i].type;
+        if(!(type=='Q' || type=='R' || type=='N' || type=='B')) continue;
+
+        int sx = cur[i].pos.x;
+        int sy = cur[i].pos.y;
+
+        Position move_record[64];
+        int n = genMove(board, sx, sy, move_record);
+        for(int j = 0; j<n; j++){
+            int nx = move_record[j].x;
+            int ny = move_record[j].y;
+
+            // Record
+            path[depth].start = (Position){sx, sy};
+            path[depth].end = (Position){nx, ny};
+
+            // base case;
+            if(board[nx][ny] == 'k'){
+                for(int m = 0; m<=depth; m++){
+                    result->moves[m] = path[m];
+                }
+                result->min_steps_to_checkmate = depth + 1;
+                return 1;
+            }
+
+            //other case;
+            if(depth + 1< max_depth){
+
+                Piece old = cur[i];
+                cur[i].pos = (Position){nx, ny};
+                char captured = appleMove(board, sx, sy, nx, ny);
+
+                // Recursive
+                if(dfs(board, depth + 1, max_depth, path, cur, player_count, result)) return 1;
+
+                //back tracking
+                undoMove(board, sx, sy, nx, ny, captured);
+                cur[i] = old;
+
+            }
         }
     }
     return 0;
 }
 
-// Generate all legal moves for piece #pi into moves[]
-// Returns the count of moves generated
-int gen_moves(int pi, Move *moves) {
-    char t = player[pi].type;
-    if (t == 'P' || t == 'K') return 0;
+void Check_Checkmate(GameState *state, SearchResult *result) {
+    char board[8][8];
+    buildBoard(board, state);
+    Move path[2];
 
-    int x = player[pi].pos.x, y = player[pi].pos.y;
-    int count = 0;
-    const int (*dirs)[2];
-    int ndirs, sliding;
-
-    if      (t == 'Q') { dirs = DIRS_Q; ndirs = 8; sliding = 1; }
-    else if (t == 'R') { dirs = DIRS_R; ndirs = 4; sliding = 1; }
-    else if (t == 'N') { dirs = DIRS_N; ndirs = 8; sliding = 0; }
-    else               { dirs = DIRS_B; ndirs = 4; sliding = 1; }
-
-    if (sliding) {
-        for (int d = 0; d < ndirs; d++) {
-            int nx = x + dirs[d][0], ny = y + dirs[d][1];
-            while (nx >= 0 && nx < 8 && ny >= 0 && ny < 8) {
-                if (board[nx][ny] > 0) break;   // own piece: can't go here
-                // Add this square as a valid destination
-                moves[count].start.x = x; moves[count].start.y = y;
-                moves[count].end.x   = nx; moves[count].end.y  = ny;
-                count++;
-                if (board[nx][ny] < 0) break;   // king: capture and stop
-                nx += dirs[d][0]; ny += dirs[d][1];
-            }
-        }
-    } else { // knight
-        for (int d = 0; d < ndirs; d++) {
-            int nx = x + dirs[d][0], ny = y + dirs[d][1];
-            if (nx < 0 || nx >= 8 || ny < 0 || ny >= 8) continue;
-            if (board[nx][ny] > 0) continue;
-            moves[count].start.x = x; moves[count].start.y = y;
-            moves[count].end.x   = nx; moves[count].end.y  = ny;
-            count++;
-        }
-    }
-    return count;
-}
-
-int min_steps;
-Move best_moves[2];
-
-void check_checkmate() {
-    min_steps = 3; // 3 means impossible
-
-    // ---- Try 1-move: can any piece directly capture the king? ----
-    for (int i = 0; i < pc; i++) {
-        if (can_reach(i, opp.x, opp.y)) {
-            min_steps = 1;
-            best_moves[0].start = player[i].pos;
-            best_moves[0].end   = opp;
-            return;
-        }
+    int player_count = state->player_count;
+    Piece cur[16];
+    for(int i = 0; i<state->player_count; i++){
+        cur[i] = state->player[i];
     }
 
-    // ---- Try 2-move: try every possible first move, then check again ----
-    Move first_moves[64]; // max ~56 moves per piece (queen, open board)
-    for (int i = 0; i < pc; i++) {
-        int nm = gen_moves(i, first_moves);
-        for (int m = 0; m < nm; m++) {
-            Move mv = first_moves[m];
+    if(dfs(board, 0, 1, path, cur, player_count, result)) return;
+    else if(dfs(board, 0, 2, path, cur, player_count, result)) return;
 
-            // Skip first moves that directly capture the king
-            // (those would've been caught by 1-move check above)
-            if (mv.end.x == opp.x && mv.end.y == opp.y) continue;
-
-            // === Apply the first move ===
-            board[mv.start.x][mv.start.y] = 0;   // piece leaves old square
-            board[mv.end.x][mv.end.y] = i + 1;   // piece arrives at new square
-            Pos saved = player[i].pos;
-            player[i].pos = mv.end;
-
-            // Check if any piece can now capture the king (2nd move)
-            for (int j = 0; j < pc; j++) {
-                if (can_reach(j, opp.x, opp.y)) {
-                    min_steps = 2;
-                    best_moves[0] = mv;
-                    best_moves[1].start = player[j].pos;
-                    best_moves[1].end   = opp;
-                    // Undo before returning
-                    board[mv.end.x][mv.end.y]   = 0;
-                    board[mv.start.x][mv.start.y] = i + 1;
-                    player[i].pos = saved;
-                    return;
-                }
-            }
-
-            // === Undo the first move ===
-            board[mv.end.x][mv.end.y]     = 0;
-            board[mv.start.x][mv.start.y] = i + 1;
-            player[i].pos = saved;
-        }
-    }
+    result->min_steps_to_checkmate = 3;
 }
 
 int main() {
     int t;
     scanf("%d", &t);
     while (t--) {
-        char type, px, py;
+        char type, pos_x, pos_y;
+        GameState state;
+        SearchResult result;
+        result.min_steps_to_checkmate = 3;  // 3 indicates it is impossible to capture the King within two steps
 
-        scanf("%d", &pc);
-        for (int i = 0; i < pc; i++) {
-            scanf(" %c %c%c", &type, &px, &py);
-            player[i].type    = type;
-            player[i].pos.x   = px - 'A'; // 'A'=0 ... 'H'=7
-            player[i].pos.y   = py - '1'; // '1'=0 ... '8'=7
+        scanf("%d", &state.player_count);
+        for (int i = 0; i < state.player_count; i++) {
+            scanf(" %c %c%c", &type, &pos_x, &pos_y);
+            state.player[i].type = type;
+            state.player[i].pos.x = pos_x - 'A';
+            state.player[i].pos.y = pos_y - '1';
         }
 
-        int oc;
-        scanf("%d", &oc); // always 1
-        scanf(" %c %c%c", &type, &px, &py);
-        opp.x = px - 'A';
-        opp.y = py - '1';
+        scanf("%d", &state.opponent_count);
+        for (int i = 0; i < state.opponent_count; i++) {
+            scanf(" %c %c%c", &type, &pos_x, &pos_y);
+            state.opponent[i].type = type;
+            state.opponent[i].pos.x = pos_x - 'A';
+            state.opponent[i].pos.y = pos_y - '1';
+        }
 
-        build_board();
-        check_checkmate();
+        Check_Checkmate(&state, &result);
 
-        if (min_steps == 3) {
+        if (result.min_steps_to_checkmate == 3) {
             printf("None\n");
-        } else {
-            printf("%d\n", min_steps);
-            for (int i = 0; i < min_steps; i++) {
+        }
+        else {
+            printf("%d\n", result.min_steps_to_checkmate);
+            for (int i = 0; i < result.min_steps_to_checkmate; i++) {
                 printf("%c%c %c%c\n",
-                    best_moves[i].start.x + 'A', best_moves[i].start.y + '1',
-                    best_moves[i].end.x   + 'A', best_moves[i].end.y   + '1');
+                       result.moves[i].start.x + 'A', result.moves[i].start.y + '1',
+                       result.moves[i].end.x + 'A', result.moves[i].end.y + '1');
             }
         }
     }
-    return 0;
 }
