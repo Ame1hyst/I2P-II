@@ -1,1 +1,1 @@
-    // total[idx+1] = carry;
+            // else if(board[nx][ny] >= 'a' && board[nx][ny] <= 'z') {move[count++] = (Position){nx, ny}; break;}
