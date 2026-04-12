@@ -91,7 +91,7 @@ int knightMove(char board[8][8], int sx, int sy, Position move[]){
         int nx = sx + KNIGHT_DIRS[i][0];
         int ny = sy + KNIGHT_DIRS[i][1];
 
-        if(in_bounded(nx, ny) && (board[nx][ny] == '.' || board[nx][ny] == 'k')) move[count++] = (Position){nx, ny};
+        if(in_bounded(nx, ny) && (board[nx][ny] == '.' || board[nx][ny] == 'k' || (board[nx][ny] >= 'a' && board[nx][ny] <= 'z'))) move[count++] = (Position){nx, ny};
     }
     return count;
 }
