@@ -1,88 +1,84 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
-#define MAXN  200005   // 2 * 10^5 + buffer
-#define LOG   18       // 2^18 = 262144 > 200000
+#define MAXN 200005
+#define LOG 18
 
-int head[MAXN], to[MAXN*2], nxt[MAXN*2], ecnt = 0;
-int dep[MAXN];
-int up[MAXN][LOG];
-int n, q;
+typedef struct{
+    int depth;
+    int ancestor[LOG];
 
-int bfs_queue[MAXN];
-int visited[MAXN];
+} Node;
 
-void add_nb(int u, int v) {
-    ecnt++;
-    to[ecnt] = v;
-    nxt[ecnt] = head[u];
-    head[u] = ecnt;
+Node nodes[MAXN];
+
+int get_depth(int num){
+    if(num == 1) return 0;
+    if(nodes[num].depth != -1) return nodes[num].depth;
+    return nodes[num].depth = get_depth(nodes[num].ancestor[0]) + 1;
 }
 
-void bfs() {
-    int front = 0, back = 0;
-    bfs_queue[back++] = 1;
-    visited[1] = 1;
-    dep[1] = 0;
-    up[1][0] = 1;
-
-    while (front < back) {
-        int u = bfs_queue[front++];
-        for (int e = head[u]; e; e = nxt[e]) {
-            int v = to[e];
-            if (!visited[v]) {
-                visited[v] = 1;
-                dep[v] = dep[u] + 1;
-                up[v][0] = u;
-                bfs_queue[back++] = v;
-            }
+void listed_ancestor(int n){
+    for(int i = 1; i<LOG; i++){
+        for(int j = 1; j<=n; j++){
+            nodes[j].ancestor[i] = nodes[nodes[j].ancestor[i-1]].ancestor[i-1];
         }
     }
 }
 
-void build() {
-    for (int k = 1; k < LOG; k++)
-        for (int v = 1; v <= n; v++)
-            up[v][k] = up[up[v][k-1]][k-1];
-}
+int lca(int a, int b){
+    // A depper
+    if(nodes[a].depth < nodes[b].depth){
+        int temp = a;
+        a = b;
+        b = temp;
+    }
 
-int lca(int u, int v) {
-    if (dep[u] > dep[v]) { int tmp = u; u = v; v = tmp; }
-    int diff = dep[v] - dep[u];
+    //Move depth a
+    int diff = nodes[a].depth - nodes[b].depth;
+    for(int i = 0; i<LOG; i++){
+        if ((diff >> i) & 1) a = nodes[a].ancestor[i];
+    }
 
-    for (int k = 0; k < LOG; k++)
-        if ((diff >> k) & 1)
-            v = up[v][k];
-
-    if (u == v) return u;
-
-    for (int k = LOG - 1; k >= 0; k--)
-        if (up[u][k] != up[v][k]) {
-            u = up[u][k];
-            v = up[v][k];
+    if(a == b) return a;
+    //Jump to top first then go down
+    for(int i = LOG - 1; i>=0; i--){
+        if(nodes[a].ancestor[i] != nodes[b].ancestor[i]){
+            a = nodes[a].ancestor[i];
+            b = nodes[b].ancestor[i];
         }
-
-    return up[u][0];
+    }
+    return nodes[a].ancestor[0];
+    
 }
 
-int main() {
+
+int main(void){
+
+    int n = 0, q = 0;
     scanf("%d %d", &n, &q);
 
-    for (int i = 2; i <= n; i++) {
-        int p;
-        scanf("%d", &p);
-        add_nb(p, i);
-        add_nb(i, p);
+    
+    nodes[1].depth = 0;
+    nodes[1].ancestor[0] = 1;
+    for(int i = 2; i<=n; i++) nodes[i].depth = -1;
+    for(int i = 2; i<=n; i++){
+        int ances = 0;
+        scanf("%d", &ances);
+        nodes[i].ancestor[0] = ances;
+        nodes[i].depth = get_depth(i);
+
     }
 
-    bfs();
-    build();
+    listed_ancestor(n);
 
-    while (q--) {
-        int u, v;
-        scanf("%d %d", &u, &v);
-        printf("%d\n", lca(u, v));
+    while (q--)
+    {
+        int a = 0, b = 0;
+        scanf("%d %d", &a, &b);
+        printf("%d\n", lca(a, b));
     }
+    
+
     return 0;
 }
