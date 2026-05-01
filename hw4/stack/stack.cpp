@@ -1,88 +1,79 @@
+#pragma once
 #include <iostream>
 using namespace std;
+class VendingMachine {
+private:
+    int* data;      
+    int capacity;   
+    int size;       // current amount
 
+    long long totalRevenue; 
+    int totalSold;          
 
+public: //these functions need to be implemented by you.
+    VendingMachine(); 
 
-class ListNode
-{
-    friend class List_stack; //make List_stack a friend
-    public:
-        ListNode( const int &info ) //constructor
-        : data( info ), nextPtr( NULL ), prevPtr( NULL )
-        {
-        } //end ListNode constructor
+    ~VendingMachine();
 
-    private:
-        int data; //data
-        ListNode *nextPtr; // next node in list
-        ListNode *prevPtr;
-}; //end class ListNode
+    void store(int price); 
 
-class List_stack {
-    public:
-        List_stack();
-        ~List_stack();
-        void push(const int &);
-        void pop();
-        void print();
-    private:
-        ListNode *head;
-        ListNode *tail;
+    void sell();
+
+    void printResult();
 };
 
-List_stack::List_stack(){
-    head = NULL;
-    tail = NULL;
+VendingMachine::VendingMachine(){
+    capacity = 2000000;
+    data = new int[capacity];
+    size = 0;
+
+    totalRevenue = 0;
+    totalSold = 0;
 }
 
-List_stack::~List_stack(){
-    ListNode *cur = head;
-        while (cur!=NULL)
-        {
-            ListNode *next = cur->nextPtr;
-            delete cur;
-            cur = next;
+VendingMachine::~VendingMachine(){
+    delete[] data;
+}
+
+void VendingMachine::store(int price){
+    int idx = size;
+    data[size++] = price;
+    while (idx > 0)
+    {
+        int parent = (idx-1) / 2;
+        if(data[parent] > data[idx]){
+            swap(data[parent], data[idx]);
+            idx = parent;
         }
-}
-
-
-
-void List_stack::push(const int &n){
-    ListNode *node = new ListNode(n);
-    if(!head){
-        head = node;
-        tail = node;
+        else break;
     }
-    else{
-        node->nextPtr = head;
-        head->prevPtr = node;
-        head = node;
-    }
-}
-
-void List_stack::pop(){
-    if(head == NULL) return; 
-    ListNode *temp = head;
-    head = head->nextPtr;
-    if(head != NULL)
-        head->prevPtr = NULL;
-    else
-        tail = NULL; 
-
-    delete temp;
     
-
 }
 
-void List_stack::print(){
-    for(ListNode *cur = head; cur !=NULL; cur = cur->nextPtr){
-        cout << cur->data;
-        if (cur->nextPtr != NULL)
-            cout << " ";
+void VendingMachine::sell(){
+    if (size == 0) return;   
+    totalRevenue += data[0];
+    totalSold++;
+
+
+    data[0] = data[--size];
+    int idx = 0;
+    while (true)
+    {
+        int left = 2*idx + 1;
+        int right = 2*idx + 2;
+        int smallest = idx;
+
+        if(left < size && data[left] < data[smallest]) smallest = left;
+        if(right < size && data[right] < data[smallest]) smallest = right;
+
+        if(smallest = idx) break;
+        swap(data[smallest], data[idx]);
+        idx = smallest;
     }
+    
 }
 
-
-
-
-
+void VendingMachine::printResult(){
+    cout << totalSold << " " << totalRevenue << "\n";
+}

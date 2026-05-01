@@ -76,7 +76,7 @@ void Matrix::subtract(const Matrix &rhs){
 
 
 void Matrix::multiply(const Matrix &rhs){
-    long long **temp = new long long*[n];
+    long long **temp = new long long*[n]();
     for (long long i = 0; i < n; i++) {
         temp[i] = new long long[n]();
     }
@@ -110,7 +110,7 @@ void Matrix::power(long long x) {
 
     Matrix result(n); // identity -> fot x = 1
 
-    long long **temp = new long long*[n];
+    long long **temp = new long long*[n]();
     for (long long i = 0; i < n; i++) {
         temp[i] = new long long[n]();
 
