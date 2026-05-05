@@ -22,11 +22,11 @@ public: //these functions need to be implemented by you.
     void printResult();
 };
 
-
 VendingMachine::VendingMachine(){
-    capacity = 2000000;
+    capacity = 2000005;
     data = new int[capacity];
     size = 0;
+
     totalRevenue = 0;
     totalSold = 0;
 }
@@ -37,37 +37,39 @@ VendingMachine::~VendingMachine(){
 
 void VendingMachine::store(int price){
     data[size++] = price;
-    int idx = size - 1;
-    while (idx > 0) {
+    int idx = size -1;
+    while (idx > 0)
+    {
         int parent = (idx - 1) / 2;
-        if (data[idx] < data[parent]) {
-            swap(data[idx], data[parent]);
+        if(data[parent] > data[idx]){
+            swap(data[parent], data[idx]);
             idx = parent;
-        } else break;
+        }
+        else break;
     }
 }
 
 void VendingMachine::sell(){
-    if (size == 0) return;   
+    if(size == 0) return;
+
     totalRevenue += data[0];
     totalSold++;
 
     data[0] = data[--size];
-
     int idx = 0;
-     while (true) {
-        int left = 2*idx + 1;
-        int right = 2*idx + 2;
+    while (true)
+    {
+        int left = idx*2 + 1;
+        int right = idx*2 + 2;
         int smallest = idx;
 
-        if (left < size && data[left] < data[smallest]) smallest = left;
-        if (right < size && data[right] < data[smallest]) smallest = right;
-
-        if (smallest == idx) break;
-        swap(data[idx], data[smallest]);
+        if(left < size && data[left] < data[smallest]) smallest = left;
+        if(right < size && data[right] < data[smallest]) smallest = right;
+        if(smallest == idx) break;
+        swap(data[smallest], data[idx]);
         idx = smallest;
     }
-
+    
 }
 
 void VendingMachine::printResult(){
