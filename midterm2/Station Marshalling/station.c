@@ -1,47 +1,76 @@
+#include "14934.h"
 #include <stdlib.h>
-typedef struct Node {
-    int id;
-    struct Node *prev;
-    struct Node *next;
-} Node;
 
-extern Node* heads[100005];
-extern Node* tails[100005];
+static Node *node_of[1000005];
 
-Node *node_of[100005];
-
-// 1. ENTER p c
-void enter(int p, int c){
+void enter(int p, int c) {
     Node *node = malloc(sizeof(Node));
 
-    node->id = c;
     node->prev = tails[p];
+    node->id = c;
     node->next = NULL;
 
-    if (tails[p]) 
-        tails[p]->next = node;
-    else           
-        heads[p] = node;
+    if(tails[p]) tails[p]->next = node;
+    else heads[p] = node;
 
     tails[p] = node;
     node_of[c] = node;
-
 }
 
-// 2. MERGE p_src p_dest
-void merge(int p_src, int p_dest){
-    if(!heads[p_dest]) return;
+void merge(int p_src, int p_dest) {
+    if(heads[p_src] == NULL) return;
 
     if(tails[p_dest]){
-        
+        tails[p_dest]->next = heads[p_src];
+        heads[p_src]->prev = tails[p_dest];
     }
+    else{
+        heads[p_dest] = heads[p_src];
+    }
+    tails[p_dest] = tails[p_src];
+    heads[p_src] = NULL;
+    tails[p_src] = NULL;
 }
 
-// 3. SPLIT p_src c p_dest
-void split(int p_src, int c, int p_dest);
+void split(int p_src, int c, int p_dest) {
+    Node *target = node_of[c];
 
-// 4. REVERSE p
-void reverse(int p);
+    heads[p_dest] = target;
+    tails[p_dest] = tails[p_src];
 
-// 5. CHECK p c k
-int check(int p, int c, int k);
+    if(target->prev){
+        target->prev->next = NULL;
+        tails[p_src] = target->prev;
+    }
+    else{
+        heads[p_src] = NULL;
+        tails[p_src] = NULL;
+    }
+
+    target->prev = NULL;
+}
+
+void reverse(int p) {
+    Node *cur = heads[p], *temp;
+
+    while (cur)
+    {
+        temp = cur->prev;
+        cur->prev = cur->next;
+        cur->next = temp;
+        cur = cur->prev;
+    }
+    
+    temp = heads[p];
+    heads[p] = tails[p];
+    tails[p] = temp;
+}
+
+int check(int p, int c, int k) {
+    Node *cur = node_of[c];
+
+    while (k-- && cur->prev)
+        cur = cur->prev;
+
+    return cur->id;
+}
