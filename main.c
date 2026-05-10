@@ -1,122 +1,74 @@
-#include <stdio.h>
+#include "14934.h"
 #include <stdlib.h>
 
-#define MAXN 200005
-#define LOG 18
+static Node *node_of[1000005];
 
-typedef struct
-{
-    int depth;
-    int ancestor[LOG];
-} Node;
+void enter(int p, int c) {
+    Node *node = malloc(sizeof(Node));
+    node->id = c; 
+    node->next = NULL; 
+    node->prev = tails[p];
 
-typedef struct Edge
-{
-    int to;
-    struct Edge *next;
-} Edge;
+    if (tails[p]) 
+        tails[p]->next = node;
+    else           
+        heads[p] = node;
 
-Edge *adj[MAXN];
-Node node[MAXN];
-
-void add_edge(int next, int to){
-    Edge *edge = malloc(sizeof(Edge));
-    edge->to = to;
-    edge->next = adj[next];
-    adj[next] = edge;
-
+    tails[p] = node;
+    node_of[c] = node;
 }
 
-void free_edge(int n){
-    for(int i = 1; i<=n; i++){
-        Edge *edge = adj[i];
-        while(edge != NULL){
-            Edge *temp = edge->next;
-            free(edge);
-            edge = temp;
-        }
+void merge(int p_src, int p_dest) {
+    if (!heads[p_src]) return;
+
+    if (tails[p_dest]) {
+        tails[p_dest]->next = heads[p_src];
+        heads[p_src]->prev  = tails[p_dest];
+    } else {
+        heads[p_dest] = heads[p_src];
     }
+
+    tails[p_dest] = tails[p_src];
+    heads[p_src] = tails[p_src] = NULL;
 }
 
-int queue[MAXN];
-int visited[MAXN] = {0};
-void bfs(){
-    int front = 0, back = 0;
-    queue[back++] = 1;
-    visited[1] = 1;
-    node[1].depth = 0;
-    node[1].ancestor[0] = 1;
+void split(int p_src, int c, int p_dest) {
+    Node *node = node_of[c];
 
-    while (front != back)
-    {
-        int cur = queue[front++];
-        for(Edge *e = adj[cur]; e != NULL; e = e->next){
-            int target = e->to;
-            if(!visited[target]){
-                visited[target] = 1;
+    heads[p_dest] = node;
+    tails[p_dest] = tails[p_src];
 
-                node[target].depth = node[cur].depth + 1;
-                node[target].ancestor[0] = cur;
-                queue[back++] = target;
-            }
-        }
+    if (node->prev) {
+        node->prev->next = NULL;
+        tails[p_src]   = node->prev;
+    } 
+    else {
+        heads[p_src] = tails[p_src] = NULL;
     }
-    
+
+    node->prev = NULL;
 }
 
-void listed_ancestor(int n){
-    for(int i = 1; i<LOG; i++){
-        for(int j = 1; j<=n; j++){
-            node[j].ancestor[i] = node[node[j].ancestor[i-1]].ancestor[i-1];
-        }
+void reverse(int p) {
+    Node *cur = heads[p], *tmp;
+
+    while (cur) {
+        tmp = cur->prev;
+        cur->prev = cur->next;
+        cur->next = tmp;
+        cur = cur->prev;
     }
+
+    tmp = heads[p];
+    heads[p] = tails[p];
+    tails[p] = tmp;
 }
 
-int lca(int a, int b){
-    if(node[a].depth < node[b].depth){
-        int temp = a;
-        a = b;
-        b = temp;
-    }
+int check(int p, int c, int k) {
+    Node *node = node_of[c];
 
-    int diff = node[a].depth - node[b].depth;
-    for(int i = 0; i<LOG; i++){
-        if(diff>>i & 1) a = node[a].ancestor[i];
-    }
+    while (k-- && node->prev)
+        node = node->prev;
 
-    if( a == b) return a;
-
-    for(int i = LOG - 1; i>=0; i--){
-        if(node[a].ancestor[i] != node[b].ancestor[i]){
-            a = node[a].ancestor[i];
-            b = node[b].ancestor[i];
-        }
-    }
-
-    return node[a].ancestor[0];
-}
-
-int main(void){
-    int n = 0, q = 0;
-    scanf("%d %d", &n, &q);
-
-    for(int i = 2; i<=n; i++){
-        int p = 0;
-        scanf("%d", &p);
-
-        add_edge(p, i);
-        add_edge(i, p);
-    }
-
-    bfs();
-    listed_ancestor(n);
-    while (q--)
-    {
-        int a = 0, b = 0;
-        scanf("%d %d", &a, &b);
-        printf("%d\n", lca(a, b));
-    }
-    
-
-    return 0;
+    return node->id;
 }

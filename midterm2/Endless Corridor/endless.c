@@ -1,4 +1,4 @@
-#include <iostream>
+#include <stdlib.h>
 
 typedef struct Node {
     struct Node *next;
@@ -9,12 +9,13 @@ typedef struct Node {
 Node *detectCycle(Node *head){
     Node *cur = head, *nnext = head;
 
-    while(nnext != NULL && nnext->next !=NULL){
+    while (nnext != NULL && nnext->next != NULL)
+    {
         cur = cur->next;
-        nnext = nnext->next->next; // walk 2
+        nnext = nnext->next->next;
+
         if(cur == nnext){
             cur = head;
-            // cycle until find
             while (cur != nnext)
             {
                 cur = cur->next;
@@ -24,9 +25,8 @@ Node *detectCycle(Node *head){
             
         }
     }
-
-    // No loop
+    
     cur = head;
-    while (cur->next != NULL) cur = cur->next;
+    while(cur->next != NULL) cur = cur->next;
     return cur;
 }
