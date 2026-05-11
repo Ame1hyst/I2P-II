@@ -25,13 +25,16 @@ private:
     bool reverse;
 };
 
+
 KuoYangPresent::KuoYangPresent(int k){
     head = NULL;
-    tail = NULL;
     mid = NULL;
+    tail = NULL;
+
     sz = 0;
     this->k = k;
     now = 0;
+
     reverse = false;
 }
 
@@ -40,16 +43,19 @@ void KuoYangPresent::Push(int x){
     node->val = x;
     node->tag = now;
 
-    
     if(!reverse){
+        node->next = NULL;
         node->prev = tail;
+        
         if(tail) tail->next = node;
         else head = node;
 
-        tail = node;     
+        tail = node;
     }
     else{
+        node->prev = NULL;
         node->next = head;
+         
         if(head) head->prev = node;
         else tail = node;
 
@@ -57,27 +63,36 @@ void KuoYangPresent::Push(int x){
     }
 
     sz++;
-    if(sz == 1) {mid = head; return;}
+    if(sz == 1) { mid = node; return;}
+
     if(!reverse){
-        if(sz%2 == 1) mid = mid->next;
+        if(sz % 2 == 1) mid = mid->next;
     }
     else{
-        if(sz%2==0) mid = mid->prev;
+        if(sz % 2 == 0) mid = mid->prev;
     }
+
+
 }
 
 void KuoYangPresent::Pop(){
+    if(sz == 1){
+        delete mid;
+        head = tail = mid = NULL;
+        sz = 0;
+        return;
+    }
+
     Node *target = mid;
     mid = mid->prev;
 
+    if(target->next) target->next->prev = target->prev;
+    else tail = target->prev;
     if(target->prev) target->prev->next = target->next;
     else head = target->next;
 
-    if(target->next) target->next->prev = target->prev;
-    else tail = target->prev;
-
-    delete target;
     sz--;
+    delete target;
 }
 
 void KuoYangPresent::Reverse(){
@@ -89,7 +104,7 @@ void KuoYangPresent::ProgrammingTanoshi(){
 }
 
 void KuoYangPresent::KuoYangTeTe(){
-    for (Node* cur = head; cur != NULL; cur = cur->next) {
+    for(Node *cur = head; cur != NULL; cur = cur->next){
         if(now > cur->tag){
             cur->val %= k;
             cur->tag = now;
@@ -106,7 +121,8 @@ void KuoYangPresent::PrintList(){
     else{
         for(Node *cur = tail; cur != NULL; cur = cur->prev){
             cout << cur->val << " ";
-        }       
+        }
     }
     cout << "\n";
 }
+

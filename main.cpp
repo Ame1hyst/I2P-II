@@ -1,117 +1,78 @@
 #include <iostream>
 using namespace std;
 
-struct Node {
-    Node *prev;
-    Node *next;
-    int val;
-    int tag;
-};
+#define MAXN 1000005
 
-class KuoYangPresent {
-public:
-    KuoYangPresent(int k);
-    void Push(int x);
-    void Pop();
-    void Reverse();
-    void ProgrammingTanoshi();
-    void KuoYangTeTe();
-    void PrintList();
+typedef struct Edge
+{
+    int to;
+    long long weigh;
+    struct Edge *next;
+} Edge;
 
-private:
-    Node *head, *mid, *tail;
-    int sz, k;
-    int now;
-    bool reverse;
-};
+typedef struct 
+{
+    long long dist;
+} Node;
 
+Edge *head[MAXN];
+Node node[MAXN];
+int queue[MAXN];
 
-KuoYangPresent::KuoYangPresent(int k) {
-    this->k = k;
-    head = tail = mid = NULL;
-    sz = 0;
-    now = 0;
-    reverse = false;
+void add_edge(int src, int dest, long long weigh){
+    Edge *e = new Edge();
+    e->to = dest;
+    e->next = head[src];
+    e->weigh = weigh;
+
+    head[src] = e;
 }
 
-void KuoYangPresent::Push(int x) {
-    Node *node = new Node();
-    node->val = x;
-    node->tag = now;   // remember when this node was inserted
+int bfs(int src, int n){
+    for(int i = 0; i < n; i++) node[i].dist = -1;
 
-    if (!reverse) {
-        node->prev = tail; 
-        node->next = NULL;
-        
-        if (tail) tail->next = node; 
-        else head = node;
-        
-        tail = node;
-    } else {
-        node->next = head; 
-        node->prev = NULL;
-        
-        if (head) head->prev = node; 
-        else tail = node;
-        
-        head = node;
-    }
-    sz++;
+    int front = 0, back = 0;
+    queue[back++] = src;
+    node[src].dist = 0;
+    int farthest = src;
 
-    if (sz == 1) { 
-        mid = head; 
-        return; 
-    }
-    if (!reverse) {
-        // pushed to physical tail: move mid right when sz turns odd
-        if (sz % 2 == 1) mid = mid->next;
-    } 
-    else {
-        // pushed to physical head: move mid left when sz turns even
-        if (sz % 2 == 0) mid = mid->prev;
-    }
-}
-
-void KuoYangPresent::Pop() {
-    // For odd sz, physical mid == logical median regardless of reverse flag
-    Node* to_del = mid;
-    mid = mid->prev;          // new mid: physical left of old mid
-
-    if (to_del->prev) to_del->prev->next = to_del->next;
-    else              head = to_del->next;
-    if (to_del->next) to_del->next->prev = to_del->prev;
-    else              tail = to_del->prev;
-
-    delete to_del;
-    sz--;
-    // sz is now even; invariant: pright = pleft + 1 ✓
-}
-
-void KuoYangPresent::Reverse() {
-    reverse = !reverse;
-}
-
-void KuoYangPresent::ProgrammingTanoshi() {
-    now++;   // lazy: nodes inserted before this call have tag < now
-}
-
-void KuoYangPresent::KuoYangTeTe() {
-    // Flush lazy mod tags before printing
-    for (Node* cur = head; cur; cur = cur->next) {
-        if (now > cur->tag) {
-            cur->val %= k;
-            cur->tag = now;
+    while(front < back){
+        int cur = queue[front++];
+        if (node[cur].dist > node[farthest].dist) farthest = cur;
+        for(Edge *e = head[cur]; e != NULL; e = e->next){
+            if(node[e->to].dist == -1){
+                node[e->to].dist  = node[cur].dist + e->weigh;
+                queue[back++] = e->to;
+            }
         }
     }
+
+    return farthest;
 }
 
-void KuoYangPresent::PrintList() {
-    if (!reverse) {
-        for (Node* cur = head; cur; cur = cur->next)
-            cout << cur->val << " ";
-    } else {
-        for (Node* cur = tail; cur; cur = cur->prev)
-            cout << cur->val << " ";
+int main(){
+    int n;
+    cin >> n;
+    long long total = 0;
+    for(int i = 0; i < n - 1; i++){
+        int a, b;
+        long long w;
+        cin >> a >> b >> w;
+        add_edge(a, b, w);
+        add_edge(b, a, w);
+        total += w;
     }
-    cout << "\n";
+
+    int deepest = bfs(0, n);
+    bfs(deepest, n);
+    
+    long long d = 0;
+    for (int i = 0; i < n; i++){
+        if (node[i].dist > d) d = node[i].dist;
+    }
+
+    cout << 2 * total - d << "\n";
+    return 0;
 }
+
+

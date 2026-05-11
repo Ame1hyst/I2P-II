@@ -6,11 +6,11 @@ using namespace std;
 typedef struct Edge
 {
     int to;
-    struct Edge *next;
     long long weigh;
+    struct Edge *next;
 } Edge;
 
-typedef struct
+typedef struct 
 {
     long long dist;
 } Node;
@@ -36,38 +36,42 @@ int bfs(int src, int n){
     node[src].dist = 0;
     int farthest = src;
 
-    while (front != back)
-    {
+    while(front < back){
         int cur = queue[front++];
-        if(node[cur].dist > node[farthest].dist) farthest = cur;
+        if (node[cur].dist > node[farthest].dist) farthest = cur;
         for(Edge *e = head[cur]; e != NULL; e = e->next){
             if(node[e->to].dist == -1){
-                node[e->to].dist = node[cur].dist + e->weigh;
+                node[e->to].dist  = node[cur].dist + e->weigh;
                 queue[back++] = e->to;
             }
         }
     }
+
     return farthest;
 }
 
-int main(void){
+int main(){
     int n;
     cin >> n;
-
     long long total = 0;
-    for(int i = 0; i < n; i++){
+    for(int i = 0; i < n - 1; i++){
         int a, b;
         long long w;
         cin >> a >> b >> w;
         add_edge(a, b, w);
         add_edge(b, a, w);
+        total += w;
     }
 
     int deepest = bfs(0, n);
-    int farthest = bfs(deepest, n);
+    bfs(deepest, n);
+    
+    long long d = 0;
+    for (int i = 0; i < n; i++){
+        if (node[i].dist > d) d = node[i].dist;
+    }
 
-
-
+    cout << 2 * total - d << "\n";
     return 0;
 }
 
