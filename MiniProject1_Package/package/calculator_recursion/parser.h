@@ -38,6 +38,7 @@ typedef struct _Node {
 
 // The symbol table
 extern Symbol table[TBLSIZE];
+extern int sbcount;
 
 // Initialize the symbol table with builtin variables
 extern void initTable(void);
@@ -55,10 +56,19 @@ extern BTNode *makeNode(TokenSet tok, const char *lexe);
 extern void freeTree(BTNode *root);
 
 extern BTNode *factor(void);
+extern BTNode *unary_expr(void);
 extern BTNode *term(void);
 extern BTNode *term_tail(BTNode *left);
 extern BTNode *expr(void);
 extern BTNode *expr_tail(BTNode *left);
+extern BTNode *assign_expr(void);
+extern BTNode *assign_expr_tails(void);
+extern BTNode *or_expr(void);
+extern BTNode *or_expr_tail(BTNode *left);
+extern BTNode *xor_expr(void);
+extern BTNode *xor_expr_tail(BTNode *left);
+extern BTNode *and_expr(void);
+extern BTNode *and_expr_tail(BTNode *left);
 extern void statement(void);
 
 // Print error message and exit the program

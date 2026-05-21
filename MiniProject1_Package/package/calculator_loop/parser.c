@@ -33,6 +33,18 @@ int getval(char *str) {
     return 0;
 }
 
+// Dont auto assign
+// int getval(char *str){
+//     int i = 0;
+
+//     for(i = 0; i < sbcount; i++){
+//         if (strcmp(str, table[i].name) == 0)
+//             return table[i].val;
+//     }
+//     error(NOTFOUND);
+//     return 0;
+// }
+
 int setval(char *str, int val) {
     int i = 0;
 
@@ -70,51 +82,52 @@ void freeTree(BTNode *root) {
     }
 }
 
-// factor := INT | ADDSUB INT |
-//		   	 ID  | ADDSUB ID  | 
-//		   	 ID ASSIGN expr |
-//		   	 LPAREN expr RPAREN |
-//		   	 ADDSUB LPAREN expr RPAREN
+// factor := INT
+//         | ID
+//         | INCDEC ID  (prefix ++ or --)
+//         | LPAREN assign_expr RPAREN
+
+// chains: statement -> assign_expr -> or_expr -> xor_expr -> and_expr -> expr -> expr -> term -> unary -> factor
 BTNode *factor(void) {
     BTNode *retp = NULL, *left = NULL;
-
+    // plain INT 
     if (match(INT)) {
         retp = makeNode(INT, getLexeme());
         advance();
-    } else if (match(ID)) {
+    } 
+    // plain ID -> variable
+    else if (match(ID)) {
+        retp = makeNode(ID, getLexeme());
+        advance();
+    }
+        // x += expr case
+
+    // ++x or --x case
+    else if(match(INCDEC)){
+        char op[3];
+        strcpy(op, getLexeme());
+        advance();
+
+        // ++int case
+        if(!match(ID)) error(NOTNUMID);
+
+        // x = x +- 1
         left = makeNode(ID, getLexeme());
         advance();
-        if (!match(ASSIGN)) {
-            retp = left;
-        } else {
-            retp = makeNode(ASSIGN, getLexeme());
-            advance();
-            retp->left = left;
-            retp->right = expr();
-        }
-    } else if (match(ADDSUB)) {
-        retp = makeNode(ADDSUB, getLexeme());
-        retp->left = makeNode(INT, "0");
+
+        retp = makeNode(ASSIGN, "=");
+        BTNode *addsub_op = makeNode(ADDSUB, op[0] == '+' ? "+" : "-");
+        addsub_op->left = makeNode(ID, left->lexeme); //cpy
+        addsub_op->right = makeNode(INT, "1");;
+
+        retp->left = left;
+        retp->right = addsub_op;
+    }
+    
+    // () handle
+    else if (match(LPAREN)) {
         advance();
-        if (match(INT)) {
-            retp->right = makeNode(INT, getLexeme());
-            advance();
-        } else if (match(ID)) {
-            retp->right = makeNode(ID, getLexeme());
-            advance();
-        } else if (match(LPAREN)) {
-            advance();
-            retp->right = expr();
-            if (match(RPAREN))
-                advance();
-            else
-                error(MISPAREN);
-        } else {
-            error(NOTNUMID);
-        }
-    } else if (match(LPAREN)) {
-        advance();
-        retp = expr();
+        retp = assign_expr();
         if (match(RPAREN))
             advance();
         else
@@ -125,17 +138,30 @@ BTNode *factor(void) {
     return retp;
 }
 
+// handle -(-x)
+BTNode *unary_expr(void){
+    if(match(ADDSUB)){
+        BTNode *retp = makeNode(ADDSUB, getLexeme());
+        retp->left = makeNode(INT, "0"); // -x -> 0 - x
+        advance();
+        retp->right = unary_expr();
+        return retp;
+    }
+    return factor();
+
+}
+
 // term      := factor term_tail
 // term_tail := MULDIV factor term_tail | NiL
 BTNode *term(void) {
     BTNode *retp = NULL, *left = NULL;
 
-    retp = left = factor();
+    retp = left = unary_expr();
     while (match(MULDIV)) {
         retp = makeNode(MULDIV, getLexeme());
         advance();
         retp->left = left;
-        retp->right = factor();
+        retp->right = unary_expr();
         left = retp;
     }
     return retp;
@@ -157,28 +183,98 @@ BTNode *expr(void) {
     return retp;
 }
 
+BTNode *assign_expr(void){
+    BTNode *left = or_expr();
+    
+    // a = b = c =.. ID
+    if(match(ASSIGN)  && left->data == ID){
+        BTNode *retp = makeNode(ASSIGN, getLexeme());
+        advance();
+        retp->left = left;
+        retp->right = assign_expr();
+        return retp;
+    }
+    // a += or_expr
+    else if(match(ADDSUB_ASSIGN) && left->data == ID){
+        char op[3];
+        strcpy(op, getLexeme());
+        advance();
+        BTNode *addsub_op = makeNode(ADDSUB, op[0] == '+' ? "+" : "-");
+        addsub_op->left = makeNode(ID, left->lexeme);
+        addsub_op->right = assign_expr(); // x += y += 2 case
+        BTNode *retp  = makeNode(ASSIGN, "=");
+        retp->left = left;
+        retp->right = addsub_op;
+        return retp;
+    }
+
+    return left;
+}
+
+BTNode *or_expr(void){
+    BTNode *retp = NULL, *left = NULL;
+    retp = left = xor_expr();
+    while (match(OR)) {
+        retp = makeNode(OR, getLexeme());
+        advance();
+        retp->left = left;
+        retp->right = xor_expr();
+        left = retp;
+    }
+    return retp;
+}
+
+BTNode *xor_expr(void){
+    BTNode *retp = NULL, *left = NULL;
+    retp = left = and_expr();
+    while (match(XOR)) {
+        retp = makeNode(XOR, getLexeme());
+        advance();
+        retp->left = left;
+        retp->right = and_expr();
+        left = retp;
+    }
+    return retp;
+}
+
+BTNode *and_expr(void){
+    BTNode *retp = NULL, *left = NULL;
+    retp = left = expr();
+    while (match(AND)) {
+        retp = makeNode(AND, getLexeme());
+        advance();
+        retp->left = left;
+        retp->right = expr();
+        left = retp;
+    }
+    return retp;
+}
+
 
 // statement := ENDFILE | END | expr END
 void statement(void) {
     BTNode *retp = NULL;
 
     if (match(ENDFILE)) {
+        genEpilogue();
         exit(0);
     } else if (match(END)) {
-        printf(">> ");
+        fprintf(stderr, ">> ");    // stays on terminal
         advance();
     } else {
-        retp = expr();
+        retp = assign_expr(); // chain -> assign_expr
         if (match(END)) {
-            printf("%d\n", evaluateTree(retp));
-            printf("Prefix traversal: ");
-            printPrefix(retp);
-            printf("\n");
+            evaluateTree(retp);
+            // printf("%d\n", evaluateTree(retp));
+            // printf("Prefix traversal: ");
+            // printPrefix(retp);
+            // printf("\n");
             freeTree(retp);
-            printf(">> ");
+            fprintf(stderr, ">> ");    // stays on terminal
             advance();
         } else {
-            error(SYNTAXERR);
+            genError();
+            exit(0);
         }
     }
 }
@@ -213,5 +309,6 @@ void err(ErrorType errorNum) {
                 break;
         }
     }
+    genError();
     exit(0);
 }
