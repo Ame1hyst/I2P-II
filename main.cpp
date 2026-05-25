@@ -1,78 +1,118 @@
-#include <iostream>
+#include "13131.h"
 using namespace std;
 
-#define MAXN 1000005
+// ─── Array_MAX_HEAP ──────────────────────────────────────────────────────────
 
-typedef struct Edge
+Array_MAX_HEAP::Array_MAX_HEAP() {}
+
+void Array_MAX_HEAP::PUSH(const int &x)
 {
-    int to;
-    long long weigh;
-    struct Edge *next;
-} Edge;
+    array[++Count] = x;
+    int i = Count;
 
-typedef struct 
+    while (i > 1 && array[i] > array[i/2])
+    {
+        swap(array[i], array[i/2]);
+        i /= 2;
+    }
+}
+
+int Array_MAX_HEAP::MAX() const
 {
-    long long dist;
-} Node;
-
-Edge *head[MAXN];
-Node node[MAXN];
-int queue[MAXN];
-
-void add_edge(int src, int dest, long long weigh){
-    Edge *e = new Edge();
-    e->to = dest;
-    e->next = head[src];
-    e->weigh = weigh;
-
-    head[src] = e;
+    return Count == 0 ? -1 : array[1];
 }
 
-int bfs(int src, int n){
-    for(int i = 0; i < n; i++) node[i].dist = -1;
+int Array_MAX_HEAP::POP()
+{
+    if (Count == 0) return -1;
+    int target = array[1];
+    array[1] = array[Count--];
+    int i = 1;
 
-    int front = 0, back = 0;
-    queue[back++] = src;
-    node[src].dist = 0;
-    int farthest = src;
+    while (true)
+    {
+        int largest = i;
+        int left  = 2*i;
+        int right = 2*i + 1;
 
-    while(front < back){
-        int cur = queue[front++];
-        if (node[cur].dist > node[farthest].dist) farthest = cur;
-        for(Edge *e = head[cur]; e != NULL; e = e->next){
-            if(node[e->to].dist == -1){
-                node[e->to].dist  = node[cur].dist + e->weigh;
-                queue[back++] = e->to;
-            }
-        }
+        if (left  <= Count && array[largest] < array[left])  largest = left;
+        if (right <= Count && array[largest] < array[right]) largest = right;
+        if (largest == i) break;
+
+        swap(array[largest], array[i]);
+        i = largest;
     }
 
-    return farthest;
+    return target;
 }
 
-int main(){
-    int n;
-    cin >> n;
-    long long total = 0;
-    for(int i = 0; i < n - 1; i++){
-        int a, b;
-        long long w;
-        cin >> a >> b >> w;
-        add_edge(a, b, w);
-        add_edge(b, a, w);
-        total += w;
-    }
+// ─── List_MAX_HEAP ───────────────────────────────────────────────────────────
 
-    int deepest = bfs(0, n);
-    bfs(deepest, n);
-    
-    long long d = 0;
-    for (int i = 0; i < n; i++){
-        if (node[i].dist > d) d = node[i].dist;
-    }
-
-    cout << 2 * total - d << "\n";
-    return 0;
+List_MAX_HEAP::List_MAX_HEAP() : root(NULL) {}
+void List_MAX_HEAP::deleteTree(ListNode *node)
+{
+    if (!node) return;
+    deleteTree(node->left);
+    deleteTree(node->right);
+    delete node;
 }
 
+void List_MAX_HEAP::PUSH(const int &x)
+{
+    ListNode* node = new ListNode(x);
+    ++Count;
+    if (Count == 1) { root = node; return; }
 
+    ListNode* par = findparent(Count, root);
+    node->parent = par;
+    if (Count % 2 == 0) par->left  = node;
+    else                 par->right = node;
+
+    ListNode* cur = node;
+    while (cur->parent && cur->value > cur->parent->value)
+    {
+        swap(cur->value, cur->parent->value);
+        cur = cur->parent;
+    }
+}
+
+int List_MAX_HEAP::MAX() const
+{
+    return Count == 0 ? -1 : root->value;
+}
+
+int List_MAX_HEAP::POP()
+{
+    if (Count == 0) return -1;
+    int target = root->value;
+
+    if (Count == 1)
+    {
+        delete root;
+        root = NULL;
+        Count = 0;
+        return target;
+    }
+
+    ListNode* lastNode = (Count % 2 == 0) ? findparent(Count, root)->left
+                                           : findparent(Count, root)->right;
+    root->value = lastNode->value;
+    if (Count % 2 == 0) lastNode->parent->left  = NULL;
+    else                 lastNode->parent->right = NULL;
+    delete lastNode;
+    --Count;
+
+    ListNode* cur = root;
+    while (true)
+    {
+        ListNode* largest = cur;
+        if (cur->left  && cur->left->value  > largest->value) largest = cur->left;
+        if (cur->right && cur->right->value > largest->value) largest = cur->right;
+        if (largest == cur) break;
+
+        swap(cur->value, largest->value);
+        cur = largest;
+    }
+
+    return target;
+}
