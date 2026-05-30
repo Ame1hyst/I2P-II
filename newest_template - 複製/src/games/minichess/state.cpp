@@ -73,7 +73,7 @@ int State::evaluate(
     (void)history; // just to suppress warning
     // [ Hackathon TODO 1-1 ]
     // if in win state, return max score(you can check base_state.hpp for max score)
-    if(game_state == WIN) return P_MAX;
+    if(this->game_state == WIN) return P_MAX;
 
     auto self_board = this->board.board[this->player]; //player board
     auto oppn_board = this->board.board[1 - this->player]; // opp board
@@ -86,20 +86,16 @@ int State::evaluate(
         int oppn_kr = -1, oppn_kc = -1;
         // [ Hackathon TODO 1-3 ]
         // get the position for player's king and opponent's king
-        bool opp_king_exist = false;
-        bool player_king_exist = false;
         for(int r = 0; r < BOARD_H; r++){
             for(int c = 0; c < BOARD_W; c++){
                 if(self_board[r][c] == 6){
                     self_kr = r;
                     self_kc = c;
-                    player_king_exist = true;
                 }
 
                 if(oppn_board[r][c] == 6){
                     oppn_kr = r;
                     oppn_kc = c;
-                    opp_king_exist = true;
                 }
             }
         }
@@ -114,10 +110,11 @@ int State::evaluate(
             for(int c = 0; c < BOARD_W; c++){
                 int self_piece = self_board[r][c];
                 if(self_piece){
+                    int pst_r = (this->player == 0) ? r : (BOARD_H - 1 - r);
                     self_score += kp_material[self_piece];
-                    self_score += pst[self_piece - 1][r][c];
+                    self_score += pst[self_piece - 1][pst_r][c];
 
-                    if(opp_king_exist){
+                    if(oppn_kr >= 0){
                         self_score += king_tropism(self_piece, r, c, oppn_kr, oppn_kc);
                     }
                 }
@@ -132,10 +129,10 @@ int State::evaluate(
                 if(opp_pieec){
                     oppn_score += kp_material[opp_pieec];
 
-                    int mirror_r = (BOARD_H - 1) - r; // pst use whilte perspective
-                    oppn_score += pst[opp_pieec - 1][mirror_r][c];
+                    int pst_r = (this->player == 1) ? r : (BOARD_H - 1 - r);
+                    oppn_score += pst[opp_pieec - 1][pst_r][c];
 
-                    if(player_king_exist){
+                    if(self_kr >= 0){
                         oppn_score += king_tropism(opp_pieec, r, c, self_kr, self_kc);
                     }
 
@@ -153,8 +150,8 @@ int State::evaluate(
                 int self_piece = self_board[r][c];
                 int opp_piece = oppn_board[r][c];
 
-                self_score += simple_material[self_piece];
-                oppn_score += simple_material[opp_piece];
+                if(self_piece) self_score += simple_material[self_piece];
+                if(opp_piece) oppn_score += simple_material[opp_piece];
             }
         }
 

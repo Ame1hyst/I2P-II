@@ -18,7 +18,7 @@ struct RootUpdate {
 struct SearchContext {
     uint64_t nodes = 0;
     int seldepth = 0;
-    bool stop = false;
+    bool stop = false; // early stop
     ParamMap params;
     std::function<void(const RootUpdate&)> on_root_update;
 
