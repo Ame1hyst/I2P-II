@@ -9,18 +9,18 @@
 struct GameHistory;
 
 /* === Type aliases === */
-typedef std::pair<size_t, size_t> Point;
-typedef std::pair<Point, Point> Move;
+typedef std::pair<size_t, size_t> Point; // pos
+typedef std::pair<Point, Point> Move; // (from pos, to pos)
 
 enum GameState { UNKNOWN = 0, WIN, DRAW, NONE };
 
 /* === Score bounds === */
-constexpr int P_MAX = 100000;
-constexpr int M_MAX = -100000;
+constexpr int P_MAX = 100000; //player plus max score
+constexpr int M_MAX = -100000; // player minus max score
 
 class BaseState {
 public:
-    int player = 0;
+    int player = 0; // 0, 1
     int step = 0;
     GameState game_state = UNKNOWN;
     std::vector<Move> legal_actions;
