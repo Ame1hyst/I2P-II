@@ -1,30 +1,32 @@
-#include <cstdio>
-#include <stack>
-#include <algorithm>
+#include <bits/stdc++.h>
 using namespace std;
 
-int main() {
-    int T;
-    scanf("%d", &T);
-    while (T--) {
-        int n;
-        scanf("%d", &n);
-        long long h[200001];
-        for (int i = 0; i < n; i++) scanf("%lld", &h[i]);
-
+int main(void){
+    int t; scanf("%d", &t);
+    while (t--)
+    {
         stack<int> st;
-        long long ans = 0;
+        int n; scanf("%d", &n);
+        vector<long long> arr(n);
+        for(int i = 0; i < n; i++) scanf("%lld", &arr[i]);
 
-        for (int i = 0; i <= n; i++) {
-            long long cur = (i == n) ? 0 : h[i];
-            while (!st.empty() && h[st.top()] > cur) {
-                long long height = h[st.top()]; st.pop();
-                long long width = st.empty() ? i : i - st.top() - 1;
-                ans = max(ans, height * width);
+        long long ans = 0;
+        for(int i = 0; i <=n; i++){
+            long long cur = (i == n)? 0: arr[i];
+            while (!st.empty() && arr[st.top()] > cur)
+            {
+                long long height = arr[st.top()];
+                st.pop();
+                int width = st.empty() ? i: i - st.top() - 1;
+                ans = max(ans, width*height);
             }
             st.push(i);
+            
         }
         printf("%lld\n", ans);
+
     }
+    
+
     return 0;
 }
